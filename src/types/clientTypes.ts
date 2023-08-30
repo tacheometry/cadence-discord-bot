@@ -2,6 +2,8 @@ import { Client, Collection, SharedNameAndDescription } from 'discord.js';
 
 type RegisterClientCommandsFunction = (params: { client: Client; executionId: string }) => void;
 
+// TODO: Set client.commandcomponentInteractions, client.autocompletecomponentInteractions, client.componentInteractions
+
 export interface Command {
     isNew?: boolean;
     isBeta?: boolean;
@@ -9,7 +11,7 @@ export interface Command {
     data: {
         name: string;
         description: string;
-        options: SharedNameAndDescription[]
+        options: SharedNameAndDescription[];
     };
     execute: (params: { interaction: object; client: ExtendedClient | undefined; executionId: string }) => void;
     autocomplete?: (params: { interaction: object; executionId: string }) => void;

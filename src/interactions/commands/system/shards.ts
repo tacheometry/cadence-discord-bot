@@ -49,6 +49,134 @@ const command: CustomSlashCommandInteraction = {
             return;
         }
 
+        const { exec } = require('child_process');
+
+        /* LINUX ONLY
+        function getChildPIDsOf(parentPid, callback) {
+            exec(`pgrep -P ${parentPid}`, (error, stdout, stderr) => {
+                if (error || !stdout) {
+                    callback(error || new Error(`No child processes found for PID ${parentPid}.`));
+                    return;
+                }
+
+                // Create a list of PIDs
+                const pids = stdout
+                    .trim()
+                    .split(/\s+/)
+                    .map((pid) => parseInt(pid, 10));
+                callback(null, pids);
+            });
+        }
+
+        function getMemoryUsageForPIDs(pids, callback) {
+            exec(`ps -o pid=,%mem=,rss= -p ${pids.join(',')}`, (error, stdout, stderr) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                // Parse the output
+                const processes = stdout
+                    .trim()
+                    .split(/\n/)
+                    .map((line) => {
+                        const [pid, percentMemory, rss] = line
+                            .trim()
+                            .split(/\s+/)
+                            .map((str) => (str === pid ? parseInt(str, 10) : parseFloat(str)));
+                        return { pid, percentMemory, rss: rss * 1024 };
+                    });
+
+                callback(null, processes);
+            });
+        }
+
+        const botJsPid = process.pid;
+
+        getChildPIDsOf(botJsPid, (err, childPIDs) => {
+            if (err) {
+                console.error('Error fetching child PIDs:', err);
+                return;
+            }
+
+            getMemoryUsageForPIDs(childPIDs, (err, processes) => {
+                if (err) {
+                    console.error('Error fetching memory usage:', err);
+                    return;
+                }
+
+                console.log('Child processes memory usage:', processes);
+            });
+        });
+
+        */
+
+        function getChildPIDsOf(parentPid, callback) {
+            const cmd = `powershell -Command "Get-WmiObject Win32_Process | Where-Object { $_.ParentProcessId -eq ${parentPid} } | Select-Object ProcessId"`;
+            exec(cmd, (error, stdout, stderr) => {
+                if (error || !stdout) {
+                    callback(error || new Error(`No child processes found for PID ${parentPid}.`));
+                    return;
+                }
+
+                // Extract PIDs from the PowerShell output
+                const pids = stdout
+                    .split(/\s+/)
+                    .filter((line) => /^\d+$/.test(line))
+                    .map((pid) => parseInt(pid, 10));
+
+                callback(null, pids);
+            });
+        }
+
+        function getMemoryUsageForPIDs(pids, callback) {
+            const cmd = `powershell -Command "Get-WmiObject Win32_Process | Where-Object { ${pids
+                .map((pid) => `($_.ProcessId -eq ${pid})`)
+                .join(' -or ')} } | Select-Object ProcessId, WS"`;
+            exec(cmd, (error, stdout, stderr) => {
+                if (error) {
+                    callback(error);
+                    return;
+                }
+
+                // Parse the PowerShell output
+                const processes = stdout
+                    .split(/\r?\n/) // Split by new lines
+                    .slice(2)
+                    .filter((line) => /^\d+\s+\d+$/.test(line.trim()))
+                    .map((line) => {
+                        const [pid, workingSet] = line
+                            .trim()
+                            .split(/\s+/)
+                            .map((str) => parseInt(str, 10));
+                        const memoryUsedMB = workingSet / (1024 * 1024);
+                        return { pid, memoryUsedMB: parseFloat(memoryUsedMB.toFixed(2)) };
+                    });
+
+                callback(null, processes);
+            });
+        }
+
+        const botJsPid = process.pid;
+
+        getChildPIDsOf(botJsPid, (err, childPIDs) => {
+            if (err) {
+                console.error('Error fetching child PIDs:', err);
+                return;
+            }
+
+            getMemoryUsageForPIDs(childPIDs, (err, processes) => {
+                if (err) {
+                    console.error('Error fetching memory usage:', err);
+                    return;
+                }
+
+                processes.forEach((proc) => {
+                    console.log(`PID: ${proc.pid}, Memory Used: ${proc.memoryUsedMB} MB`);
+                });
+            });
+        });
+
         let shardInfoList: ShardInfo[] = [];
 
         logger.debug('Fetching player statistics and client values from each shard.');
